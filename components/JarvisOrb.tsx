@@ -56,7 +56,7 @@ export default function JarvisOrb() {
     let timer: NodeJS.Timeout;
 
     const connectToJarvis = () => {
-      const host = typeof window !== "undefined" ? window.location.hostname || "localhost" : "localhost";
+      const host = "localhost";
       const wsUrl = `ws://${host}:8000/ws/live`;
       const httpUrl = `http://${host}:8000/api/status`;
 
@@ -118,7 +118,11 @@ export default function JarvisOrb() {
   }, []);
 
   const sendAction = async (action: string) => {
-    const host = window.location.hostname || "localhost";
+    // 1. Direct console bridge for QtWebEngine inside Jarvis HUD
+    console.log(`JARVIS_ACTION:${action}`);
+
+    // 2. Local network fallback
+    const host = "localhost";
     try {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "action", action }));
@@ -130,8 +134,8 @@ export default function JarvisOrb() {
           signal: AbortSignal.timeout(500),
         });
       }
-    } catch (e) {
-      console.error("Action error:", e);
+    } catch {
+      // quiet on standalone web
     }
   };
 
@@ -141,7 +145,9 @@ export default function JarvisOrb() {
     const cmd = inputText.trim();
     setInputText("");
 
-    const host = window.location.hostname || "localhost";
+    console.log(`JARVIS_COMMAND:${cmd}`);
+
+    const host = "localhost";
     try {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "command", text: cmd }));
@@ -150,12 +156,13 @@ export default function JarvisOrb() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: cmd }),
+          signal: AbortSignal.timeout(500),
         });
       }
-      setLogs((prev) => [...prev.slice(-25), { speaker: "user", text: cmd }]);
-    } catch (err) {
-      console.error("Command error:", err);
+    } catch {
+      // quiet on standalone web
     }
+    setLogs((prev) => [...prev.slice(-25), { speaker: "user", text: cmd }]);
   };
 
   const stopGestures = useCallback(() => {
