@@ -32,9 +32,9 @@ const PINCH_ON = 0.32;
 const PINCH_OFF = 0.45;
 
 // How strongly hand movement rotates the orb (radians per normalized unit)
-const ROTATE_SPEED = 5.0;
-// Smoothing factor for grab-point tracking (0..1, higher = snappier)
-const SMOOTHING = 0.4;
+const ROTATE_SPEED = 7.5;
+// Smoothing factor for grab-point tracking (0..1, higher = snappier, lower = smoother)
+const SMOOTHING = 0.55;
 
 export type GestureMode = "idle" | "spin" | "zoom";
 

@@ -133,43 +133,10 @@ body {
   gap: 8px;
 }
 
-.hud-hint {
-  bottom: 24px;
-  left: 24px;
-  font-size: 11px;
-  line-height: 1.7;
-  letter-spacing: 0.1em;
-  opacity: 0.55;
-  text-shadow: 0 0 8px rgba(255, 170, 48, 0.6);
-  pointer-events: none;
-}
-
-.hud-hint .key {
-  display: inline-block;
-  padding: 0 4px;
-  border: 1px solid rgba(255, 170, 48, 0.5);
-  border-radius: 3px;
-  margin-right: 4px;
-  font-size: 10px;
-}
-
+.hud-hint,
+.jarvis-hud-left,
 .hud-title {
-  top: 24px;
-  left: 24px;
-  font-size: 13px;
-  letter-spacing: 0.35em;
-  opacity: 0.7;
-  text-shadow: 0 0 10px rgba(255, 170, 48, 0.8);
-  pointer-events: none;
-}
-
-.hud-title::after {
-  content: "";
-  display: block;
-  margin-top: 6px;
-  width: 120px;
-  height: 1px;
-  background: linear-gradient(to right, rgba(255, 170, 48, 0.8), transparent);
+  display: none !important;
 }
 
 .hud-error {

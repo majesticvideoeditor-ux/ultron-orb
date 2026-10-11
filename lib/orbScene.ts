@@ -88,11 +88,16 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   // Controls
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.04;
+  controls.dampingFactor = 0.08;
+  controls.rotateSpeed = 1.4;
   controls.minDistance = MIN_DISTANCE;
   controls.maxDistance = MAX_DISTANCE;
-  controls.zoomSpeed = 1.4;
+  controls.zoomSpeed = 1.6;
   controls.enablePan = false;
+  controls.touches = {
+    ONE: THREE.TOUCH.ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN,
+  };
 
   // ——— COLORS ———
   const C_BRIGHT = 0xffaa30;
@@ -656,20 +661,12 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   // ═══════════════════════════════════════════════
   const sphericalScratch = new THREE.Spherical();
   const offsetScratch = new THREE.Vector3();
+  let targetDeltaTheta = 0;
+  let targetDeltaPhi = 0;
 
   function rotateBy(deltaTheta: number, deltaPhi: number) {
-    offsetScratch.copy(camera.position).sub(controls.target);
-    sphericalScratch.setFromVector3(offsetScratch);
-    sphericalScratch.theta -= deltaTheta;
-    sphericalScratch.phi = THREE.MathUtils.clamp(
-      sphericalScratch.phi - deltaPhi,
-      0.05,
-      Math.PI - 0.05,
-    );
-    sphericalScratch.makeSafe();
-    offsetScratch.setFromSpherical(sphericalScratch);
-    camera.position.copy(controls.target).add(offsetScratch);
-    camera.lookAt(controls.target);
+    targetDeltaTheta += deltaTheta;
+    targetDeltaPhi += deltaPhi;
   }
 
   function zoomBy(factor: number) {
@@ -807,6 +804,27 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
 
     // Update chromatic aberration time
     chromaticPass.uniforms.uTime.value = t;
+
+    // Smooth gesture rotation applying
+    if (Math.abs(targetDeltaTheta) > 1e-5 || Math.abs(targetDeltaPhi) > 1e-5) {
+      const stepTheta = targetDeltaTheta * 0.25;
+      const stepPhi = targetDeltaPhi * 0.25;
+      targetDeltaTheta -= stepTheta;
+      targetDeltaPhi -= stepPhi;
+
+      offsetScratch.copy(camera.position).sub(controls.target);
+      sphericalScratch.setFromVector3(offsetScratch);
+      sphericalScratch.theta -= stepTheta;
+      sphericalScratch.phi = THREE.MathUtils.clamp(
+        sphericalScratch.phi - stepPhi,
+        0.05,
+        Math.PI - 0.05,
+      );
+      sphericalScratch.makeSafe();
+      offsetScratch.setFromSpherical(sphericalScratch);
+      camera.position.copy(controls.target).add(offsetScratch);
+      camera.lookAt(controls.target);
+    }
 
     controls.update();
     composer.render();
