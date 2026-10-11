@@ -1,12 +1,11 @@
 import type { NextConfig } from "next";
 
-const isGithubPages = process.env.GITHUB_ACTIONS === "true";
-const repoName = "ultron-orb";
+const repoName = "/ultron-orb";
 
 const nextConfig: NextConfig = {
   output: "export",
-  basePath: isGithubPages ? `/${repoName}` : "",
-  assetPrefix: isGithubPages ? `/${repoName}/` : undefined,
+  basePath: repoName,
+  assetPrefix: `${repoName}/`,
   images: {
     unoptimized: true,
   },
