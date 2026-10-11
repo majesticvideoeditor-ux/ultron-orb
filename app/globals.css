@@ -233,3 +233,141 @@ body {
     display: none;
   }
 }
+
+/* ——— Jarvis Remote Control & Live Chat ——— */
+.jarvis-hud-left {
+  position: fixed;
+  top: 24px;
+  left: 24px;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 360px;
+  width: calc(100vw - 48px);
+  pointer-events: auto;
+}
+
+.jarvis-status-card {
+  padding: 8px 12px;
+  background: rgba(15, 10, 5, 0.75);
+  border: 1px solid rgba(255, 170, 48, 0.45);
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 16px rgba(255, 140, 20, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.jarvis-status-text {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  font-weight: bold;
+  color: #ffaa30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+  display: inline-block;
+}
+
+.status-dot.sleeping {
+  background: #eab308;
+  box-shadow: 0 0 8px #eab308;
+}
+
+.status-dot.offline {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+.jarvis-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.jarvis-act-btn {
+  padding: 6px 10px;
+  background: rgba(25, 15, 5, 0.75);
+  border: 1px solid rgba(255, 170, 48, 0.45);
+  color: #ffcc66;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.jarvis-act-btn:hover {
+  background: rgba(255, 170, 48, 0.2);
+  border-color: #ffaa30;
+  box-shadow: 0 0 10px rgba(255, 170, 48, 0.3);
+}
+
+.jarvis-log-box {
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 8px;
+  background: rgba(10, 5, 0, 0.65);
+  border: 1px solid rgba(255, 170, 48, 0.25);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #ddb875;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  scrollbar-width: thin;
+}
+
+.jarvis-log-entry.user {
+  color: #60a5fa;
+}
+
+.jarvis-log-entry.jarvis {
+  color: #ffaa30;
+}
+
+.jarvis-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.jarvis-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: rgba(10, 5, 0, 0.8);
+  border: 1px solid rgba(255, 170, 48, 0.4);
+  border-radius: 4px;
+  color: #ffcc66;
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+}
+
+.jarvis-input:focus {
+  border-color: #ffaa30;
+  box-shadow: 0 0 10px rgba(255, 170, 48, 0.3);
+}
+
+.jarvis-send-btn {
+  padding: 6px 12px;
+  background: rgba(255, 170, 48, 0.2);
+  border: 1px solid #ffaa30;
+  color: #ffaa30;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+}

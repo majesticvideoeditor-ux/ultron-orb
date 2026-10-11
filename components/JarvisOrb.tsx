@@ -6,6 +6,13 @@ import { HandTracker, type TrackerStatus } from "@/lib/handTracker";
 
 type CameraState = "off" | "starting" | "on" | "error";
 
+interface LogEntry {
+  speaker?: string;
+  text?: string;
+  type?: string;
+  ts?: string;
+}
+
 const MODE_LABEL: Record<TrackerStatus["mode"], string> = {
   idle: "STANDBY",
   spin: "SPIN",
@@ -23,6 +30,13 @@ export default function JarvisOrb() {
   const [status, setStatus] = useState<TrackerStatus>({ hands: 0, mode: "idle" });
   const [error, setError] = useState<string | null>(null);
 
+  // Jarvis Live Remote State
+  const [jarvisConnected, setJarvisConnected] = useState(false);
+  const [jarvisState, setJarvisState] = useState<string>("CONNECTING");
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [inputText, setInputText] = useState("");
+  const wsRef = useRef<WebSocket | null>(null);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -36,9 +50,118 @@ export default function JarvisOrb() {
     };
   }, []);
 
+  // Connect to Jarvis backend on port 8000
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let timer: NodeJS.Timeout;
+
+    const connectToJarvis = () => {
+      const host = typeof window !== "undefined" ? window.location.hostname || "localhost" : "localhost";
+      const wsUrl = `ws://${host}:8000/ws/live`;
+      const httpUrl = `http://${host}:8000/api/status`;
+
+      // Initial HTTP health check
+      fetch(httpUrl)
+        .then((res) => res.json())
+        .then((data) => {
+          setJarvisConnected(true);
+          setJarvisState(data.state || "ONLINE");
+        })
+        .catch(() => {
+          setJarvisConnected(false);
+          setJarvisState("OFFLINE");
+        });
+
+      try {
+        ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          setJarvisConnected(true);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "status") {
+              setJarvisState(data.state || "ACTIVE");
+            } else if (data.type === "log" || data.speaker) {
+              setLogs((prev) => [...prev.slice(-25), data]);
+            }
+          } catch {
+            // ignore non-json
+          }
+        };
+
+        ws.onclose = () => {
+          setJarvisConnected(false);
+          setJarvisState("OFFLINE");
+          timer = setTimeout(connectToJarvis, 4000);
+        };
+
+        ws.onerror = () => {
+          ws?.close();
+        };
+      } catch {
+        setJarvisConnected(false);
+        setJarvisState("OFFLINE");
+        timer = setTimeout(connectToJarvis, 4000);
+      }
+    };
+
+    connectToJarvis();
+
+    return () => {
+      if (ws) ws.close();
+      clearTimeout(timer);
+    };
+  }, []);
+
+  const sendAction = async (action: string) => {
+    const host = window.location.hostname || "localhost";
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "action", action }));
+      } else {
+        await fetch(`http://${host}:8000/api/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+          signal: AbortSignal.timeout(500),
+        });
+      }
+    } catch (e) {
+      console.error("Action error:", e);
+    }
+  };
+
+  const sendCommand = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!inputText.trim()) return;
+    const cmd = inputText.trim();
+    setInputText("");
+
+    const host = window.location.hostname || "localhost";
+    try {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "command", text: cmd }));
+      } else {
+        await fetch(`http://${host}:8000/api/command`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: cmd }),
+        });
+      }
+      setLogs((prev) => [...prev.slice(-25), { speaker: "user", text: cmd }]);
+    } catch (err) {
+      console.error("Command error:", err);
+    }
+  };
+
   const stopGestures = useCallback(() => {
     trackerRef.current?.stop();
     trackerRef.current = null;
+    void sendAction("resume_camera");
     setCamera("off");
     setStatus({ hands: 0, mode: "idle" });
   }, []);
@@ -51,10 +174,18 @@ export default function JarvisOrb() {
     setCamera("starting");
     setError(null);
 
+    // Release Python camera so Windows webcam isn't locked
+    await sendAction("pause_camera");
+    await new Promise((r) => setTimeout(r, 200));
+
     const tracker = new HandTracker(video, overlay, {
       onRotate: (dt, dp) => sceneRef.current?.rotateBy(dt, dp),
       onZoom: (factor) => sceneRef.current?.zoomBy(factor),
       onStatus: setStatus,
+      onPalm: () => {
+        sendAction("interrupt");
+        setLogs((prev) => [...prev.slice(-25), { speaker: "gesture", text: "🖐 Open Palm detected -> Silenced" }]);
+      },
     });
     trackerRef.current = tracker;
 
@@ -62,14 +193,20 @@ export default function JarvisOrb() {
       await tracker.start();
       setCamera("on");
     } catch (err) {
+      console.error("Tracker start failed:", err);
       trackerRef.current = null;
       tracker.stop();
+      void sendAction("resume_camera");
       setCamera("error");
-      setError(
-        err instanceof DOMException && err.name === "NotAllowedError"
-          ? "CAMERA ACCESS DENIED"
-          : "TRACKING INIT FAILED",
-      );
+      const errName = (err && typeof err === "object" && "name" in err) ? (err as { name: string }).name : "";
+      if (errName === "NotAllowedError" || (err instanceof DOMException && err.name === "NotAllowedError")) {
+        setError("CAMERA ACCESS DENIED");
+      } else if (errName === "NotReadableError" || (err instanceof DOMException && err.name === "NotReadableError")) {
+        setError("WEBCAM IN USE BY ANOTHER APP");
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg ? `TRACKING INIT FAILED: ${msg}` : "TRACKING INIT FAILED");
+      }
     }
   }, []);
 
@@ -80,6 +217,9 @@ export default function JarvisOrb() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in the input box
+      if (document.activeElement?.tagName === "INPUT") return;
+
       switch (e.key) {
         case "+":
         case "=":
@@ -113,7 +253,62 @@ export default function JarvisOrb() {
       <div className="overlay-grain" />
       <div className="overlay-scanlines" />
 
-      <div className="hud hud-title">U.L.T.R.O.N.</div>
+      {/* Jarvis Live Mobile Dashboard Card */}
+      <div className="jarvis-hud-left">
+        <div className="jarvis-status-card">
+          <div className="jarvis-status-text">
+            <span
+              className={`status-dot ${
+                !jarvisConnected ? "offline" : jarvisState === "SLEEPING" ? "sleeping" : ""
+              }`}
+            />
+            JARVIS // {jarvisState}
+          </div>
+          <div style={{ fontSize: "11px", opacity: 0.7 }}>
+            {jarvisConnected ? "LOCAL NETWORK" : "DISCONNECTED"}
+          </div>
+        </div>
+
+        {/* Remote Action Touch Buttons */}
+        <div className="jarvis-actions">
+          <button type="button" className="jarvis-act-btn" onClick={() => sendAction("wake")}>
+            ⚡ WAKE
+          </button>
+          <button type="button" className="jarvis-act-btn" onClick={() => sendAction("interrupt")}>
+            🛑 SILENCE
+          </button>
+          <button type="button" className="jarvis-act-btn" onClick={() => sendAction("sleep")}>
+            💤 SLEEP
+          </button>
+        </div>
+
+        {/* Live Conversation Transcript */}
+        {logs.length > 0 && (
+          <div className="jarvis-log-box">
+            {logs.map((log, idx) => (
+              <div key={idx} className={`jarvis-log-entry ${log.speaker || "sys"}`}>
+                <strong style={{ textTransform: "uppercase" }}>{log.speaker || "SYS"}:</strong> {log.text}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Wireless Command Bar */}
+        <form onSubmit={sendCommand} className="jarvis-input-row">
+          <input
+            type="text"
+            className="jarvis-input"
+            placeholder="Type command to PC..."
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+          />
+          <button type="submit" className="jarvis-send-btn">
+            SEND
+          </button>
+        </form>
+      </div>
+
+      <div className="hud hud-title">U.L.T.R.O.N. // ORB</div>
 
       <div className="hud hud-hint">
         <div>
@@ -122,21 +317,19 @@ export default function JarvisOrb() {
         </div>
         {cameraOn ? (
           <div>
-            <span className="key">PINCH + MOVE</span> spin&nbsp;&nbsp;
-            <span className="key">PINCH BOTH HANDS ± SPREAD</span> zoom
+            <div><span className="key">✋ PALM</span> Silence / Interrupt</div>
+            <div><span className="key">🤏 PINCH</span> Spin &nbsp;|&nbsp; <span className="key">2-HANDS</span> Zoom</div>
           </div>
         ) : (
           <div>
-            <span className="key">G</span> hand gestures&nbsp;&nbsp;
-            <span className="key">R</span> reset&nbsp;&nbsp;
-            <span className="key">+/−</span> zoom
+            <div><span className="key">G</span> Enable Hand Tracking (Palm = Silence)</div>
+            <div><span className="key">DRAG</span> Spin &nbsp;|&nbsp; <span className="key">SCROLL</span> Zoom</div>
           </div>
         )}
       </div>
 
       <div className="hud hud-controls">
         <div className={`camera-panel${cameraOn ? " visible" : ""}`}>
-          {/* Mirrored preview so it behaves like a mirror */}
           <video ref={videoRef} muted playsInline className="camera-video" />
           <canvas ref={overlayRef} width={208} height={156} className="camera-overlay" />
           <div className="camera-status">
